@@ -17,5 +17,8 @@ instances = { min = 2, max = 100000, default = 20 }
   [testcases.params]
   connection_count  = { type = "int", desc = "number of connections per node", unit = "nodes", default = 20 }
   publisher_count   = { type = "int", desc = "number of nodes publishing", unit = "nodes", default = 20 }
+  attacker_count    = { type = "int", desc = "number of nodes trying to swallow messages", unit = "nodes", default = 0 }
+  attack_after      = { type = "int", desc = "start the attack after receiving N messages", unit = "msg", default = 0 }
   message_count     = { type = "int", desc = "number of messages to send per publisher", unit = "msg", default = 20 }
+  warmup_messages   = { type = "int", desc = "empty messages to send before test", unit = "msg", default = 10 }
   max_message_delay = { type = "int", desc = "max delay between messages per publisher", unit = "ms", default = 500 }

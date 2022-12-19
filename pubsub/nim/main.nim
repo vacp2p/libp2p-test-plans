@@ -2,7 +2,7 @@ import serialization, json_serialization, stew/endians2, stew/byteutils
 import libp2p, testground_sdk, libp2p/protocols/pubsub/rpc/messages
 import chronos
 import sequtils, hashes
-from times import getTime, toUnix, fromUnix, `-`, initTime, `$`
+from times import getTime, toUnix, fromUnix, `-`, initTime, `$`, inMilliseconds
 
 type
   PeerData = object
@@ -22,6 +22,7 @@ testground(client):
   let
     myId = await client.signal("initialized_global")
     isPublisher = myId <= client.param(int, "publisher_count")
+    isAttacker = myId - client.param(int, "publisher_count") <= client.param(int, "attacker_count")
     rng = libp2p.newRng()
     address = addresses[0][0].host
     switch =
@@ -29,8 +30,8 @@ testground(client):
         .new()
         .withAddress(MultiAddress.init(address).tryGet())
         .withRng(rng)
-        #.withYamux()
-        .withMplex()
+        .withYamux()
+        #.withMplex()
         .withTcpTransport(flags = {ServerFlags.TcpNoDelay})
         #.withPlainText()
         .withNoise()
@@ -43,17 +44,39 @@ testground(client):
       anonymize = true,
       )
   gossipSub.parameters.floodPublish = false
-  gossipSub.parameters.heartbeatInterval = 5.minutes
+  gossipSub.parameters.opportunisticGraftThreshold = 10000
+  gossipSub.parameters.heartbeatInterval = 500.milliseconds
+  gossipSub.parameters.pruneBackoff = 5.seconds
+  gossipSub.topicParams["test"] = TopicParams(
+    topicWeight: 1,
+    firstMessageDeliveriesWeight: 1,
+    firstMessageDeliveriesCap: 30,
+    firstMessageDeliveriesDecay: 0.6
+  )
 
   proc messageHandler(topic: string, data: seq[byte]) {.async.} =
+    let sentUint = uint64.fromBytesLE(data)
+    # warm-up
+    if sentUint < 1000000 or isAttacker: return
     let
-      sentUint = uint64.fromBytesLE(data)
       sentMoment = nanoseconds(int64(uint64.fromBytesLE(data)))
       sentNanosecs = nanoseconds(sentMoment - seconds(sentMoment.seconds))
       sentDate = initTime(sentMoment.seconds, sentNanosecs)
       diff = getTime() - sentDate
-    echo sentUint, ": ", diff
+    echo sentUint, " milliseconds: ", diff.inMilliseconds()
+
+
+  var receivedMessage = 0
+  proc messageValidator(topic: string, msg: Message): Future[ValidationResult] {.async.} =
+    receivedMessage.inc()
+    return
+      if receivedMessage >= client.param(int, "attack_after"):
+        ValidationResult.Ignore
+      else:
+        ValidationResult.Accept
   gossipSub.subscribe("test", messageHandler)
+  if isAttacker:
+    gossipSub.addValidator(["test"], messageValidator)
   switch.mount(gossipSub)
   await switch.start()
   #TODO
@@ -66,7 +89,7 @@ testground(client):
     )
   )
   echo "Listening on ", switch.peerInfo.addrs
-  echo myId, ", ", isPublisher
+  echo myId, ", ", isPublisher, ", ", switch.peerInfo.peerId
 
   var peersInfo: seq[PeerData]
   while peersInfo.len < client.testInstanceCount:
@@ -107,7 +130,12 @@ testground(client):
   await client.waitForBarrier("connected", client.testInstanceCount)
 
   if isPublisher:
+    # wait for mesh to be setup
     let maxMessageDelay = client.param(int, "max_message_delay")
+    for i in 0 ..< client.param(int, "warmup_messages"):
+      await sleepAsync(milliseconds(rng.rand(maxMessageDelay)))
+      doAssert((await gossipSub.publish("test", @(toBytesLE(uint64(myId * 1000 + i))))) > 0)
+
     for _ in 0 ..< client.param(int, "message_count"):
       await sleepAsync(milliseconds(rng.rand(maxMessageDelay)))
       let

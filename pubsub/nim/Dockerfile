@@ -9,6 +9,9 @@ FROM builder
 
 ARG PLAN_PATH="./"
 COPY ./plan/${PLAN_PATH} ./plan
-RUN cd plan && nimble install -dy && nim c -d:chronicles_log_level=NOTICE -d:release main.nim
+RUN cd plan && nimble install -dy && \
+  nim c -d:chronicles_log_level=NOTICE \
+  -d:release \
+  main.nim
 
 ENTRYPOINT ["plan/main"]
