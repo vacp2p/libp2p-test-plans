@@ -22,7 +22,7 @@ testground(client):
   let
     myId = await client.signal("initialized_global")
     isPublisher = myId <= client.param(int, "publisher_count")
-    isAttacker = myId - client.param(int, "publisher_count") <= client.param(int, "attacker_count")
+    isAttacker = (not isPublisher) and myId - client.param(int, "publisher_count") <= client.param(int, "attacker_count")
     rng = libp2p.newRng()
     address = addresses[0][0].host
     switch =
@@ -30,34 +30,35 @@ testground(client):
         .new()
         .withAddress(MultiAddress.init(address).tryGet())
         .withRng(rng)
-        .withYamux()
-        #.withMplex()
+        #.withYamux()
+        .withMplex()
         .withTcpTransport(flags = {ServerFlags.TcpNoDelay})
         #.withPlainText()
         .withNoise()
         .build()
     gossipSub = GossipSub.init(
       switch = switch,
-      triggerSelf = true,
+#      triggerSelf = true,
       msgIdProvider = msgIdProvider,
       verifySignature = false,
       anonymize = true,
       )
-  gossipSub.parameters.floodPublish = false
+#  gossipSub.parameters.floodPublish = false
   gossipSub.parameters.opportunisticGraftThreshold = 10000
-  gossipSub.parameters.heartbeatInterval = 500.milliseconds
-  gossipSub.parameters.pruneBackoff = 5.seconds
+  gossipSub.parameters.heartbeatInterval = 700.milliseconds
+  gossipSub.parameters.pruneBackoff = 3.seconds
   gossipSub.topicParams["test"] = TopicParams(
     topicWeight: 1,
     firstMessageDeliveriesWeight: 1,
     firstMessageDeliveriesCap: 30,
-    firstMessageDeliveriesDecay: 0.6
+    firstMessageDeliveriesDecay: 0.9
   )
 
   proc messageHandler(topic: string, data: seq[byte]) {.async.} =
     let sentUint = uint64.fromBytesLE(data)
     # warm-up
-    if sentUint < 1000000 or isAttacker: return
+    if sentUint < 1000000: return
+    #if isAttacker: return
     let
       sentMoment = nanoseconds(int64(uint64.fromBytesLE(data)))
       sentNanosecs = nanoseconds(sentMoment - seconds(sentMoment.seconds))
@@ -66,11 +67,12 @@ testground(client):
     echo sentUint, " milliseconds: ", diff.inMilliseconds()
 
 
-  var receivedMessage = 0
+  var
+    startOfTest: Moment
+    attackAfter = seconds(client.param(int, "attack_after"))
   proc messageValidator(topic: string, msg: Message): Future[ValidationResult] {.async.} =
-    receivedMessage.inc()
     return
-      if receivedMessage >= client.param(int, "attack_after"):
+      if Moment.now - startOfTest >= attackAfter:
         ValidationResult.Ignore
       else:
         ValidationResult.Accept
@@ -129,11 +131,15 @@ testground(client):
 
   await client.waitForBarrier("connected", client.testInstanceCount)
 
+  let
+    maxMessageDelay = client.param(int, "max_message_delay")
+    warmupMessages = client.param(int, "warmup_messages")
+  startOfTest = Moment.now() + milliseconds(warmupMessages * maxMessageDelay div 2)
+
   if isPublisher:
     # wait for mesh to be setup
-    let maxMessageDelay = client.param(int, "max_message_delay")
-    for i in 0 ..< client.param(int, "warmup_messages"):
-      await sleepAsync(milliseconds(rng.rand(maxMessageDelay)))
+    for i in 0 ..< warmupMessages:
+      await sleepAsync(milliseconds(maxMessageDelay div 2))
       doAssert((await gossipSub.publish("test", @(toBytesLE(uint64(myId * 1000 + i))))) > 0)
 
     for _ in 0 ..< client.param(int, "message_count"):
