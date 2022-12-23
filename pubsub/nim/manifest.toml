@@ -22,3 +22,4 @@ instances = { min = 2, max = 100000, default = 20 }
   message_count     = { type = "int", desc = "number of messages to send per publisher", unit = "msg", default = 20 }
   warmup_messages   = { type = "int", desc = "empty messages to send before test", unit = "msg", default = 10 }
   max_message_delay = { type = "int", desc = "max delay between messages per publisher", unit = "ms", default = 500 }
+  outbound_only     = { type = "int", desc = "number of nodes without incoming connections", unit = "nodes", default = 0 }

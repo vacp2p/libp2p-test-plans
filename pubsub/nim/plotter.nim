@@ -1,3 +1,4 @@
+import os
 import strutils
 import ggplotnim
 
@@ -36,10 +37,15 @@ let
 
 df = df.filter(f{`time` < maxTime - 3}).mutate(f{"scaled_amount" ~ `amount` * factor})
 
+echo "Average max latency: ", df["maxLatencies", int].mean
+echo "Average received count: ", df["amount", int].mean
+echo "Minimum received count: ", df["amount", int].min
+
 let sa = secAxis(name = "Reception count", trans = f{1.0 / factor})
 ggplot(df, aes("time", "maxLatencies")) +
   geom_line(aes("time", y = "scaled_amount", color = "Amount")) +
   ylim(0, maxLatency) +
+  ggtitle(paramStr(1)) +
   legendPosition(0.8, -0.2) +
   scale_y_continuous(name = "Latency (ms)", secAxis = sa) +
   geom_line(aes("time", y = "maxLatencies", color = "Max")) +

@@ -32,6 +32,7 @@ testground(client):
         .withRng(rng)
         #.withYamux()
         .withMplex()
+        .withMaxConnections(10000)
         .withTcpTransport(flags = {ServerFlags.TcpNoDelay})
         #.withPlainText()
         .withNoise()
@@ -97,6 +98,8 @@ testground(client):
   while peersInfo.len < client.testInstanceCount:
     peersInfo.add(await peersTopic.popFirst())
 
+  peersInfo = peersInfo[client.param(int, "outbound_only") .. ^1]
+
   rng.shuffle(peersInfo)
 
   let connectTo = client.param(int, "connection_count")
@@ -109,7 +112,7 @@ testground(client):
       peerId = PeerId.init(peerInfo.id).tryGet()
       addrs = peerInfo.addrs.mapIt(MultiAddress.init(it).tryGet())
     try:
-      await switch.connect(peerId, addrs)
+      await switch.connect(peerId, addrs).wait(5.seconds)
       connected.inc()
     except CatchableError as exc:
       echo "Failed to dial", exc.msg
