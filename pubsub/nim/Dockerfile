@@ -11,6 +11,12 @@ ARG PLAN_PATH="./"
 COPY ./plan/${PLAN_PATH} ./plan
 RUN cd plan && nimble install -dy && \
   nim c -d:chronicles_log_level=NOTICE \
+  -p:libp2p \
+  --NimblePath:libp2p/nimbledeps/pkgs \
+  -d:metrics \
+  --threads:on \
+  -d:withoutPCRE \
+  -d:libp2p_network_protocols_metrics \
   -d:release \
   main.nim
 

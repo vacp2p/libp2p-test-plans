@@ -1,7 +1,8 @@
 import serialization, json_serialization, stew/endians2, stew/byteutils
 import libp2p, testground_sdk, libp2p/protocols/pubsub/rpc/messages
+import libp2p/muxers/mplex/lpchannel
 import chronos
-import sequtils, hashes
+import sequtils, hashes, metrics
 from times import getTime, toUnix, fromUnix, `-`, initTime, `$`, inMilliseconds
 
 type
@@ -21,8 +22,9 @@ testground(client):
 
   let
     myId = await client.signal("initialized_global")
-    isPublisher = myId <= client.param(int, "publisher_count")
-    isAttacker = (not isPublisher) and myId - client.param(int, "publisher_count") <= client.param(int, "attacker_count")
+    publisherCount = client.param(int, "publisher_count")
+    isPublisher = myId <= publisherCount
+    isAttacker = (not isPublisher) and myId - publisherCount <= client.param(int, "attacker_count")
     rng = libp2p.newRng()
     address = addresses[0][0].host
     switch =
@@ -44,7 +46,8 @@ testground(client):
       verifySignature = false,
       anonymize = true,
       )
-#  gossipSub.parameters.floodPublish = false
+  gossipSub.parameters.floodPublish = false
+  #gossipSub.parameters.lazyPushMinSize = 10000
   gossipSub.parameters.opportunisticGraftThreshold = 10000
   gossipSub.parameters.heartbeatInterval = 700.milliseconds
   gossipSub.parameters.pruneBackoff = 3.seconds
@@ -72,14 +75,14 @@ testground(client):
     startOfTest: Moment
     attackAfter = seconds(client.param(int, "attack_after"))
   proc messageValidator(topic: string, msg: Message): Future[ValidationResult] {.async.} =
-    return
-      if Moment.now - startOfTest >= attackAfter:
-        ValidationResult.Ignore
-      else:
-        ValidationResult.Accept
+    #await sleepAsync(milliseconds(rng.rand(50)))
+    if isAttacker and Moment.now - startOfTest >= attackAfter:
+      return ValidationResult.Ignore
+
+    return ValidationResult.Accept
+
   gossipSub.subscribe("test", messageHandler)
-  if isAttacker:
-    gossipSub.addValidator(["test"], messageValidator)
+  gossipSub.addValidator(["test"], messageValidator)
   switch.mount(gossipSub)
   await switch.start()
   #TODO
@@ -125,14 +128,15 @@ testground(client):
       callback_target: some client.testInstanceCount,
       routing_policy: "accept_all",
       default: LinkShape(
-        latency: 100000000,
-      #  jitter: 100000000,
+      #  latency: 100000000,
+        jitter: 100_000_000, # in nanoseconds
+        bandwidth: 25_000_000, # bits per seconds
       )
 
     )
   )
-
   await client.waitForBarrier("connected", client.testInstanceCount)
+  #discard await client.signalAndWait("connected", client.testInstanceCount)
 
   let
     maxMessageDelay = client.param(int, "max_message_delay")
@@ -143,15 +147,22 @@ testground(client):
     # wait for mesh to be setup
     for i in 0 ..< warmupMessages:
       await sleepAsync(milliseconds(maxMessageDelay div 2))
-      doAssert((await gossipSub.publish("test", @(toBytesLE(uint64(myId * 1000 + i))))) > 0)
+      if i mod publisherCount == myId:
+        let warmupMsg = @(toBytesLE(uint64(myId * 1000 + i))) & newSeq[byte](500_000)
+        doAssert((await gossipSub.publish("test", warmupMsg)) > 0)
 
-    for _ in 0 ..< client.param(int, "message_count"):
-      await sleepAsync(milliseconds(rng.rand(maxMessageDelay)))
-      let
-        now = getTime()
-        nowInt = seconds(now.toUnix()) + nanoseconds(times.nanosecond(now))
-        nowBytes = @(toBytesLE(uint64(nowInt.nanoseconds)))
-      #echo "sending ", uint64(nowInt.nanoseconds)
-      doAssert((await gossipSub.publish("test", nowBytes)) > 0)
+    for msg in 0 ..< client.param(int, "message_count"):
+      #await sleepAsync(milliseconds(rng.rand(maxMessageDelay)))
+      await sleepAsync(6.seconds) # half a slot, for faster sims
+      if msg mod publisherCount == myId:
+        let
+          now = getTime()
+          nowInt = seconds(now.toUnix()) + nanoseconds(times.nanosecond(now))
+          nowBytes = @(toBytesLE(uint64(nowInt.nanoseconds))) & newSeq[byte](500_000)
+        #echo "sending ", uint64(nowInt.nanoseconds)
+        doAssert((await gossipSub.publish("test", nowBytes)) > 0)
 
   discard await client.signalAndWait("done", client.testInstanceCount)
+  echo "BW: ", libp2p_protocols_bytes.value(labelValues=["/meshsub/1.1.0", "in"]) + libp2p_protocols_bytes.value(labelValues=["/meshsub/1.1.0", "out"])
+  echo "DUPS: ", libp2p_gossipsub_duplicate.value(), " / ", libp2p_gossipsub_received.value()
+  echo "WAITED: ", libp2p_waited.value()
