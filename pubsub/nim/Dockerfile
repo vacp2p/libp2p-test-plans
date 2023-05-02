@@ -1,7 +1,8 @@
 ARG NimVersion="latest"
-FROM nimlang/nim:${NimVersion}-alpine as builder
+FROM nimlang/nim:${NimVersion}-ubuntu as builder
 
-RUN nimble install -y "https://github.com/status-im/testground-nim-sdk@#c282ff68c08ef85a7ca011e077e3e69eb1a6edec"
+RUN nimble install -y "https://github.com/status-im/testground-nim-sdk@#872753fe083c470ecce8e3a90091cf8dee7840ac"
+RUN apt update && apt install -y iproute2
 
 #ARG Libp2pVersion="#fc5a5731"
 #RUN nimble install -y "libp2p@${Libp2pVersion}"

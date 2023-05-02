@@ -1,18 +1,23 @@
 import os
-import strutils
+import strutils, sequtils
 import ggplotnim
 
 var
   time: seq[int]
   latency: seq[int]
+  bandwidth: seq[int]
 
 for l in lines("/tmp/toto"):
+  if "BW:" in l:
+    bandwidth.add(parseInt(l.split(" ")[^1].split(".")[0]))
+  if "DUPS:" in l: continue
   if "milliseconds" notin l: continue
 
   let splitted = l.split(" ")
   time.add(splitted[^3].parseInt)
   latency.add(splitted[^1].parseInt)
 
+echo "BW: ", foldl(bandwidth, a + b, 0)
 #var
 #  time = @[0, 0, 0, 5, 5, 5, 9, 9]
 #  latency = @[300, 500, 600, 100, 500, 600, 800, 900]
@@ -37,7 +42,11 @@ let
 
 df = df.filter(f{`time` < maxTime - 3}).mutate(f{"scaled_amount" ~ `amount` * factor})
 
+df.writeCsv("/tmp/df.csv")
+
 echo "Average max latency: ", df["maxLatencies", int].mean
+echo "Average mean latency: ", df["meanLatencies", int].mean
+echo "Average min latency: ", df["minLatencies", int].mean
 echo "Average received count: ", df["amount", int].mean
 echo "Minimum received count: ", df["amount", int].min
 
