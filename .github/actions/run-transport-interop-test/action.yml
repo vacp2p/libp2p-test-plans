@@ -38,6 +38,7 @@ runs:
   steps:
 
     - name: Get values
+      shell: bash
       run: |
         echo ${{ github.api_url }}
         echo ${{ github.event_name }}
