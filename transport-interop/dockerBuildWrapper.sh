@@ -2,11 +2,11 @@
 
 CACHING_OPTIONS=""
 # If in CI and we have a defined cache bucket, use caching
-if [[ -n "${CI}" ]] && [[ -n "${AWS_BUCKET}" ]]; then
+# if [[ -n "${CI}" ]] && [[ -n "${AWS_BUCKET}" ]]; then
     # CACHING_OPTIONS="\
     #     --cache-to   type=s3,mode=max,bucket=$AWS_BUCKET,region=$AWS_REGION,prefix=buildCache,name=$IMAGE_NAME \
     #     --cache-from type=s3,mode=max,bucket=$AWS_BUCKET,region=$AWS_REGION,prefix=buildCache,name=$IMAGE_NAME"
-fi
+# fi
 
 CACHING_OPTIONS="\
         --cache-to   type=gha,mode=max \
