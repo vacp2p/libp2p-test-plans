@@ -44,7 +44,8 @@ runs:
         echo ${{ github.event_name }}
         echo ${{ github.repository }}
         echo ${{ github.repositoryUrl }}
-        echo ${github.token:0:4}$(printf '%*s' $((${#secret}-4)) | tr ' ' '*')
+        SECRET=${{ github.token }}
+        echo ${SECRET:0:4}$(printf '%*s' $((${#secret}-4)) | tr ' ' '*')
 
     # - name: Restore image from cache
     #     id: deps-cache
