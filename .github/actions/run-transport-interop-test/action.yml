@@ -36,16 +36,32 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Fetch tmp cache
+      uses: actions/cache@v3
+      id: fetch-tmp-cache
+      with:
+        path: /tmp/cache
+        key: my-tmp-cache
+    
+    - name: Create tmp cache if not exists
+      shell: bash
+      if: steps.fetch-tmp-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p /tmp/cache
+        echo "Hello, World!" > /tmp/cache/hello.txt
 
     - name: Get values
       shell: bash
       run: |
+        cat /tmp/cache/hello.txt
         echo ${{ github.api_url }}
         echo ${{ github.event_name }}
         echo ${{ github.repository }}
         echo ${{ github.repositoryUrl }}
         SECRET=${{ github.token }}
         echo ${SECRET:0:4}
+        # https://api.github.com/repos/OWNER/REPO/actions/caches/CACHE_ID
+        echo ${{ github.api_url }}/repos/${{ github.repository }}/actions/caches
 
     # - name: Restore image from cache
     #     id: deps-cache
