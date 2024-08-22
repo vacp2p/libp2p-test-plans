@@ -36,6 +36,16 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: List caches via API
+      shell: bash
+      run: |
+        # https://api.github.com/repos/OWNER/REPO/actions/caches/CACHE_ID
+        ENDPOINT=${{ github.api_url }}/repos/${{ github.repository }}/actions/caches
+        curl -L \
+          $ENDPOINT
+        curl -L \
+          $ENDPOINT/my-tmp-cache
+
     - name: Fetch tmp cache
       uses: actions/cache@v3
       id: fetch-tmp-cache
@@ -53,15 +63,12 @@ runs:
     - name: Get values
       shell: bash
       run: |
-        cat /tmp/cache/hello.txt
         echo ${{ github.api_url }}
         echo ${{ github.event_name }}
         echo ${{ github.repository }}
         echo ${{ github.repositoryUrl }}
         SECRET=${{ github.token }}
         echo ${SECRET:0:4}
-        # https://api.github.com/repos/OWNER/REPO/actions/caches/CACHE_ID
-        echo ${{ github.api_url }}/repos/${{ github.repository }}/actions/caches
 
     # - name: Restore image from cache
     #     id: deps-cache
