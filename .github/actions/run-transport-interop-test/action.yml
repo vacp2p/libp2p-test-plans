@@ -39,12 +39,11 @@ runs:
     - name: List caches via API
       shell: bash
       run: |
-        # https://api.github.com/repos/OWNER/REPO/actions/caches/CACHE_ID
         ENDPOINT=${{ github.api_url }}/repos/${{ github.repository }}/actions/caches
-        curl -L \
-          $ENDPOINT
-        curl -L \
-          $ENDPOINT/my-tmp-cache
+        # curl -L \
+        #   $ENDPOINT
+        # curl -L \
+        #   $ENDPOINT/my-tmp-cache
 
     - name: Fetch tmp cache
       uses: actions/cache@v3
